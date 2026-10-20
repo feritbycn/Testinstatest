@@ -1,0 +1,61 @@
+name: NurInsight APK Derle
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: ZIP varsa aç
+        run: |
+          Z=$(find . -maxdepth 2 -iname '*.zip' -not -path './.git/*' | head -n 1)
+          if [ -n "$Z" ] && [ -z "$(find . -name 'settings.gradle*' -not -path './.git/*' | head -n 1)" ]; then
+            echo "Açılıyor: $Z"
+            mkdir -p proje
+            unzip -q -o "$Z" -d proje
+          fi
+
+      - name: Java 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle kur
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Android projesini bul
+        id: project
+        run: |
+          P=$(find . \( -name settings.gradle.kts -o -name settings.gradle \) \
+            -not -path '*/.gradle/*' -not -path '*/build/*' | head -n 1)
+          if [ -z "$P" ]; then
+            echo "::error::settings.gradle bulunamadı"
+            ls -R . | head -50
+            exit 1
+          fi
+          echo "dir=$(dirname "$P")" >> "$GITHUB_OUTPUT"
+
+      - name: APK derle
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: APK dosyasını yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: NurInsight-debug-APK
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
